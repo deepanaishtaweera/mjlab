@@ -17,6 +17,10 @@ Added
   conditional nodes, which require CUDA 12.4 or newer.
 - Added ``RewardManager.term_rewards`` and ``RewardManager.get_term()`` for the
   per-term reward vector from the last step :issue:`1223`.
+- The velocity, tracking and manipulation runners expose their ONNX export as
+  ``export_onnx_with_metadata(path)``, which ``save`` calls. Runners that override
+  ``save``, such as off-policy runners that checkpoint different state, can call it to
+  still produce the deployable ONNX.
 
 Changed
 ^^^^^^^

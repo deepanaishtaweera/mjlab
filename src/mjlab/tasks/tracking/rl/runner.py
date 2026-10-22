@@ -92,6 +92,14 @@ class MotionTrackingOnPolicyRunner(MjlabOnPolicyRunner):
 
   def save(self, path: str, infos=None):
     super().save(path, infos)
+    self.export_onnx_with_metadata(path)
+
+  def export_onnx_with_metadata(self, path: str) -> None:
+    """Export the policy to ONNX beside the checkpoint at ``path``, with metadata.
+
+    ``save`` calls this after writing the checkpoint. Runners that override ``save``,
+    such as off-policy runners that checkpoint different state, can call it directly.
+    """
     policy_dir, filename, onnx_path = self._get_export_paths(path)
     try:
       self.export_policy_to_onnx(str(policy_dir), filename)

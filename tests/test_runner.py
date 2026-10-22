@@ -588,6 +588,54 @@ def test_task_runner_uploads_onnx_for_wandb_logger(
   )
 
 
+@pytest.mark.parametrize(
+  ("runner_module", "runner_class"),
+  [
+    ("mjlab.tasks.velocity.rl.runner", "VelocityOnPolicyRunner"),
+    ("mjlab.tasks.manipulation.rl.runner", "ManipulationOnPolicyRunner"),
+    ("mjlab.tasks.tracking.rl.runner", "MotionTrackingOnPolicyRunner"),
+  ],
+)
+def test_task_runner_exports_onnx_without_save(
+  runner_module, runner_class, monkeypatch, tmp_path
+):
+  """export_onnx_with_metadata works on its own, for runners that override save."""
+  import importlib
+
+  runner_mod = importlib.import_module(runner_module)
+  if runner_class == "MotionTrackingOnPolicyRunner":
+    runner = _make_tracking_runner_shell(None, is_wandb=True)
+  else:
+    runner_cls = getattr(runner_mod, runner_class)
+    runner = runner_cls.__new__(runner_cls)
+    runner.cfg = {"upload_model": True}
+    runner.logger = _make_logger_mock(is_wandb=True)
+    runner.env = MagicMock()
+  runner.export_policy_to_onnx = MagicMock()
+
+  def fail_save(*args, **kwargs):
+    raise AssertionError("export must not save a checkpoint")
+
+  monkeypatch.setattr(MjlabOnPolicyRunner, "save", fail_save)
+  monkeypatch.setattr(runner_mod, "get_base_metadata", lambda *a: {})
+  monkeypatch.setattr(runner_mod, "attach_metadata_to_onnx", lambda *a: None)
+
+  checkpoint = tmp_path / "run-dir" / "model_100.pt"
+  checkpoint.parent.mkdir()
+  onnx_path = checkpoint.parent / f"{checkpoint.parent.name}.onnx"
+
+  with patch.object(runner_mod, "wandb") as mock_wandb:
+    mock_wandb.run = MagicMock()
+    runner.export_onnx_with_metadata(str(checkpoint))
+
+  runner.export_policy_to_onnx.assert_called_once_with(
+    str(checkpoint.parent), onnx_path.name
+  )
+  mock_wandb.save.assert_called_once_with(
+    str(onnx_path), base_path=str(checkpoint.parent)
+  )
+
+
 def _make_tracking_runner_shell(registry_name, is_wandb, upload_model=True):
   """Build a MotionTrackingOnPolicyRunner with all heavy parts mocked out."""
   from mjlab.tasks.tracking.rl.runner import MotionTrackingOnPolicyRunner

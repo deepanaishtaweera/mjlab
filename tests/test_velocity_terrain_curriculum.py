@@ -112,3 +112,50 @@ def test_early_termination_owes_the_time_left():
   terrain_levels_vel(env, torch.arange(1), command_name="twist")
 
   assert terrain.terrain_levels.tolist() == [2]
+
+
+def test_reports_progress_signals():
+  """The term reports promote/demote rates and frac_at_max, not just the mean."""
+  terrain = _FakeTerrain(num_envs=4, size=8.0)
+  env = _make_env(terrain, common_step_counter=1, walked=100.0, commanded=100.0)
+
+  out = terrain_levels_vel(
+    env, torch.arange(4), command_name="twist", asset_cfg=SceneEntityCfg("robot")
+  )
+
+  assert {"mean", "max", "frac_at_max", "promote_rate", "demote_rate"} <= set(out)
+  # Everyone walked as commanded, so everyone is promoted and nobody demoted.
+  assert out["promote_rate"].item() == 1.0
+  assert out["demote_rate"].item() == 0.0
+  # One promotion from level 0 reaches level 1, not the top of a 10-level ladder.
+  assert out["frac_at_max"].item() == 0.0
+
+
+def test_frac_at_max_counts_top_level_envs():
+  terrain = _FakeTerrain(num_envs=4, size=8.0)
+  terrain.terrain_levels[:2] = terrain.max_terrain_level - 1
+  # Nothing commanded and nothing walked: no env changes level.
+  env = _make_env(terrain, common_step_counter=1, walked=0.0)
+
+  out = terrain_levels_vel(
+    env, torch.arange(4), command_name="twist", asset_cfg=SceneEntityCfg("robot")
+  )
+
+  assert out["frac_at_max"].item() == 0.5
+  assert out["promote_rate"].item() == 0.0
+  assert out["demote_rate"].item() == 0.0
+
+
+def test_demote_rate_counts_short_walks():
+  terrain = _FakeTerrain(num_envs=4, size=8.0)
+  terrain.terrain_levels[:] = 3
+  # Commanded 10 m, walked 1 m: below half, so every env is demoted.
+  env = _make_env(terrain, common_step_counter=1, walked=1.0, commanded=10.0)
+
+  out = terrain_levels_vel(
+    env, torch.arange(4), command_name="twist", asset_cfg=SceneEntityCfg("robot")
+  )
+
+  assert out["demote_rate"].item() == 1.0
+  assert out["promote_rate"].item() == 0.0
+  assert torch.all(terrain.terrain_levels == 2)

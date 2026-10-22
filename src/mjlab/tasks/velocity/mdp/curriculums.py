@@ -82,9 +82,17 @@ def terrain_levels_vel(
 
   # Compute per-terrain-type mean levels.
   levels = terrain.terrain_levels.float()
+  at_max = terrain.terrain_levels >= terrain.max_terrain_level - 1
   result: dict[str, torch.Tensor] = {
     "mean": torch.mean(levels),
     "max": torch.max(levels),
+    # Progress signals. The mean level alone is not one: an env that solves the top
+    # level is sent to a uniformly random level, so a mastered terrain type settles
+    # near the middle of the range however easy it is. These say whether envs are
+    # still climbing.
+    "frac_at_max": at_max.float().mean(),
+    "promote_rate": move_up.float().mean(),
+    "demote_rate": move_down.float().mean(),
   }
 
   # In curriculum mode num_cols == num_terrains (one column per type),

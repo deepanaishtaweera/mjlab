@@ -17,6 +17,10 @@ Added
   conditional nodes, which require CUDA 12.4 or newer.
 - Added ``RewardManager.term_rewards`` and ``RewardManager.get_term()`` for the
   per-term reward vector from the last step :issue:`1223`.
+- ``terrain_levels_vel`` now also logs ``frac_at_max``, ``promote_rate`` and
+  ``demote_rate``. The mean terrain level is not a progress signal on its own: an
+  environment that solves the top level is sent to a random level, so a mastered
+  sub-terrain settles mid-range.
 
 Changed
 ^^^^^^^

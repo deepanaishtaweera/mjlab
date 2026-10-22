@@ -176,6 +176,13 @@ Environments that reach the maximum level are randomly reassigned to
 any row, maintaining coverage across all difficulty levels. See
 :ref:`terrain` for details on configuring the terrain grid itself.
 
+Because of that reassignment, the logged mean level settles near the
+middle of the range once a terrain type is mastered, so it does not say
+whether the policy is still improving. The term also logs
+``frac_at_max``, the fraction of environments on the top row, and
+``promote_rate`` and ``demote_rate``, the fractions of the environments
+reset that step that moved up or down.
+
 
 Writing custom curriculum functions
 ------------------------------------

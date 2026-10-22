@@ -98,6 +98,9 @@ Per-term rewards
 ``reward_manager.term_rewards`` is the ``[num_envs, num_terms]`` reward vector from
 the last step, with columns ordered like ``active_terms`` and summing to the reward.
 ``reward_manager.get_term(name)`` returns one column.
+``reward_manager.get_episode_sums(name)`` returns a term's per-env sum since each
+environment's last reset, as logged under ``Episode_Reward/<term_name>`` but per
+environment and before dividing by the episode duration.
 
 
 Writing custom reward functions

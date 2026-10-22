@@ -129,3 +129,89 @@ def commands_vel(
     "ang_vel_z_min": torch.tensor(cfg.ranges.ang_vel_z[0]),
     "ang_vel_z_max": torch.tensor(cfg.ranges.ang_vel_z[1]),
   }
+
+
+class commands_vel_adaptive:
+  """Widen the velocity command range only once tracking is good enough.
+
+  Implements the command curriculum from Rudin et al. 2022 (``legged_gym``'s
+  ``update_command_curriculum``): when the mean per-second linear velocity
+  tracking reward exceeds ``reward_fraction`` of that term's weight, the
+  ``lin_vel_x`` range grows symmetrically by ``delta``, clipped to
+  ``max_lin_vel_x``. The range never narrows.
+
+  This differs from :func:`commands_vel`, which widens on a fixed step schedule
+  regardless of whether the policy can track the range it already has. An
+  open-loop schedule can hand the policy commands it cannot achieve, and
+  standing still is often a better local optimum than attempting them.
+
+  The tracking reward is read from :meth:`RewardManager.get_episode_sums`.
+
+  Deviation from the reference implementation: ``legged_gym`` reads the tracking
+  reward from whichever envs happen to reset on the exact step where
+  ``step % max_episode_length == 0``, which can be a tiny (or empty) sample.
+  Here every reset batch updates an exponential moving average, and the decision
+  to widen is taken at most once per ``update_interval_steps`` using that
+  average, so it does not hinge on one step's sample.
+  """
+
+  def __init__(self, cfg, env: ManagerBasedRlEnv):
+    del cfg
+    self._ema: float | None = None
+    self._last_update_step: int = 0
+    self._env = env
+
+  def __call__(
+    self,
+    env: ManagerBasedRlEnv,
+    env_ids: torch.Tensor,
+    command_name: str,
+    reward_term_name: str = "track_linear_velocity",
+    reward_fraction: float = 0.8,
+    delta: float = 0.5,
+    max_lin_vel_x: float = 1.0,
+    ema_decay: float = 0.9,
+    update_interval_steps: int | None = None,
+  ) -> dict[str, torch.Tensor]:
+    command_term = env.command_manager.get_term(command_name)
+    assert command_term is not None
+    cfg = cast(UniformVelocityCommandCfg, command_term.cfg)
+
+    weight = env.reward_manager.get_term_cfg(reward_term_name).weight
+    sums = env.reward_manager.get_episode_sums(reward_term_name)
+    sampled = sums[env_ids]
+
+    if sampled.numel() > 0 and weight != 0.0:
+      # Average per second (dt-scaled sums) or per step, normalized by the term's
+      # ceiling, which is its weight either way.
+      duration = (
+        env.max_episode_length_s
+        if env.reward_manager._scale_by_dt
+        else env.max_episode_length
+      )
+      ratio = float((torch.mean(sampled) / duration / weight).clamp(min=0.0))
+      self._ema = (
+        ratio
+        if self._ema is None
+        else (ema_decay * self._ema + (1.0 - ema_decay) * ratio)
+      )
+
+    interval = update_interval_steps or env.max_episode_length
+    due = env.common_step_counter - self._last_update_step >= interval
+    if due and self._ema is not None:
+      self._last_update_step = env.common_step_counter
+      if self._ema > reward_fraction:
+        lo, hi = cfg.ranges.lin_vel_x
+        cfg.ranges.lin_vel_x = (
+          max(lo - delta, -max_lin_vel_x),
+          min(hi + delta, max_lin_vel_x),
+        )
+
+    return {
+      "lin_vel_x_min": torch.tensor(cfg.ranges.lin_vel_x[0]),
+      "lin_vel_x_max": torch.tensor(cfg.ranges.lin_vel_x[1]),
+      "tracking_ratio": torch.tensor(-1.0 if self._ema is None else self._ema),
+    }
+
+  def reset(self, env_ids: torch.Tensor) -> None:
+    del env_ids  # The EMA and cooldown are global, not per-env.

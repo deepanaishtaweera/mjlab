@@ -48,6 +48,12 @@ Built-in curriculum functions
      - Widens velocity command ranges based on training step count.
        Each stage specifies a step threshold and the new ranges to
        apply once that threshold is exceeded.
+   * - ``commands_vel_adaptive``
+     - Widens the ``lin_vel_x`` command range by a fixed step once the
+       linear velocity tracking reward of finished episodes exceeds a
+       fraction of its maximum, following ``legged_gym``. Unlike
+       ``commands_vel`` it never widens the range past what the policy
+       can track.
    * - ``reward_curriculum``
      - Adjusts a reward term's weight and/or params according to
        training step thresholds. Replaces the older ``reward_weight``

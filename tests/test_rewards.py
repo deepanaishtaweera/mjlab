@@ -300,6 +300,29 @@ def test_reward_manager_handles_neginf_values(mock_env):
   assert rewards[2] == 0.0
 
 
+def test_get_episode_sums_accumulates_until_reset(mock_env):
+  """Episode sums are per env, dt-scaled, and cleared only for the reset envs."""
+
+  def constant_reward(env):
+    return torch.ones(env.num_envs, device=env.device)
+
+  cfg = {"term": RewardTermCfg(func=constant_reward, weight=2.0, params={})}
+  manager = RewardManager(cfg, mock_env)
+
+  manager.compute(dt=0.02)
+  manager.compute(dt=0.02)
+  sums = manager.get_episode_sums("term")
+  assert torch.allclose(sums, torch.full((4,), 2 * 2.0 * 0.02))
+
+  manager.reset(torch.tensor([0, 1], device=mock_env.device))
+  sums = manager.get_episode_sums("term")
+  assert torch.all(sums[:2] == 0.0)
+  assert torch.allclose(sums[2:], torch.full((2,), 2 * 2.0 * 0.02))
+
+  with pytest.raises(ValueError, match="not found"):
+    manager.get_episode_sums("missing")
+
+
 def test_reward_scaling_enabled(mock_env):
   """Test that rewards are scaled by dt when scale_by_dt=True (default)."""
 

@@ -17,6 +17,13 @@ Added
   conditional nodes, which require CUDA 12.4 or newer.
 - Added ``RewardManager.term_rewards`` and ``RewardManager.get_term()`` for the
   per-term reward vector from the last step :issue:`1223`.
+- Added ``commands_vel_adaptive``, a velocity command curriculum that widens the
+  ``lin_vel_x`` range only once the linear velocity tracking reward of finished
+  episodes exceeds a fraction of its maximum, following the command curriculum in
+  ``legged_gym``. Unlike ``commands_vel``, which widens on a fixed step schedule, it
+  does not hand the policy commands it has not yet learned to track.
+- Added ``RewardManager.get_episode_sums()`` for a term's per-environment reward
+  accumulated since the last reset.
 
 Changed
 ^^^^^^^

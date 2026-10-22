@@ -175,6 +175,19 @@ class RewardManager(ManagerBase):
       raise ValueError(f"Term '{term_name}' not found in active terms.")
     return self._term_cfgs[self._term_names.index(term_name)]
 
+  def get_episode_sums(self, term_name: str) -> torch.Tensor:
+    """Per-env reward accumulated for a term since that env last reset.
+
+    Scaled like ``reward_buf``: with the default ``scale_by_dt=True``, dividing by
+    ``max_episode_length_s`` gives a per-second average whose ceiling is the term's
+    weight. Curriculum terms run before the reset clears these, so they can use them
+    to gate on achieved performance. An env that terminated early contributes a
+    partial sum.
+    """
+    if term_name not in self._episode_sums:
+      raise ValueError(f"Term '{term_name}' not found in active terms.")
+    return self._episode_sums[term_name]
+
   def _prepare_terms(self):
     for term_name, term_cfg in self.cfg.items():
       term_cfg: RewardTermCfg | None
